@@ -1,0 +1,30 @@
+# FastAPI and Web
+fastapi[standard]==0.110.0
+uvicorn[standard]==0.27.1
+python-multipart==0.0.9
+websockets==12.0
+
+# AI/ML Models
+transformers==4.36.2
+torch==2.1.2
+
+# Audio Processing
+numpy==1.23.5
+librosa==0.10.1
+soundfile==0.12.1
+
+# Image/Video Processing
+pillow==10.2.0
+opencv-python==4.9.0.80
+
+# Database
+sqlalchemy==2.0.25
+
+# Authentication
+pyjwt==2.8.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.1.2
+
+# Utilities
+python-dotenv==1.0.1
+typing-extensions==4.8.0

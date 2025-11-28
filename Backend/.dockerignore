@@ -1,0 +1,14 @@
+__pycache__/
+*.log
+*.mp4
+*.png
+*.jpg
+*.jpeg
+*.csv
+*.ipynb
+node_modules/
+venv/
+.env
+data/
+dist/
+models/

@@ -1,0 +1,8 @@
+{
+  "name": "Docker Enabled Environment",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "forwardPorts": [8000],
+  "remoteUser": "codespace"
+}
