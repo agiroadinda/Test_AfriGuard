@@ -28,3 +28,8 @@ bcrypt==4.1.2
 # Utilities
 python-dotenv==1.0.1
 typing-extensions==4.8.0
+
+aiofiles
+httpx[cli]
+
+
