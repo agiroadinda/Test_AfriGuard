@@ -16,8 +16,8 @@ RUN npm ci
 COPY . .
 
 # Build arguments for environment variables
-ARG VITE_API_BASE_URL=http://localhost:8000/api
-ARG VITE_WS_BASE_URL=ws://localhost:8000
+ARG VITE_API_BASE_URL=http://afriguard-backend:8000/api
+ARG VITE_WS_BASE_URL=ws://afriguard-backend:8000
 
 # Set environment variables for build
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL

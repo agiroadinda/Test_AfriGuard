@@ -1,7 +1,8 @@
 # backend/main.py
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, WebSocket, WebSocketDisconnect, status
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, WebSocket, WebSocketDisconnect, status, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import PlainTextResponse
 from typing import List, Optional
 from pydantic import BaseModel, EmailStr
 from datetime import datetime, timedelta
@@ -10,6 +11,9 @@ import asyncio
 import json
 import uuid
 import os
+import aiofiles
+import httpx
+
 
 # AI/ML imports
 from transformers import Wav2Vec2FeatureExtractor, WavLMForXVector, ViTImageProcessor, ViTForImageClassification
@@ -35,11 +39,13 @@ import enum
 # =============================================================================
 # Configuration
 # =============================================================================
-SECRET_KEY = os.getenv(SECRET_KEY)
+SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
-DATABASE_URL = os.getenv(DATABASE_URL)
+DATABASE_URL = os.getenv("DATABASE_URL")
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 
 # CORS origins - update for production
 CORS_ORIGINS = [
@@ -869,6 +875,85 @@ async def detect_video_manipulation(
         raise HTTPException(500, f"Video processing failed: {str(e)}")
     finally:
         os.unlink(temp_file.name)
+
+
+@app.post("/api/whatsapp/webhook")
+async def whatsapp_webhook(
+    request: Request,
+    From: str = Form(None),  # Sender's WhatsApp number
+    Body: str = Form(None),  # Text message (if any)
+    NumMedia: int = Form(0),  # Number of media files
+    MediaUrl0: str = Form(None),  # URL of the first media
+    MediaContentType0: str = Form(None),  # e.g., image/jpeg
+    MessageSid: str = Form(None),  # Unique Twilio message ID
+    db: Session = Depends(get_db)
+):
+    """Twilio WhatsApp Webhook: Receives image → triggers detection → optional reply."""
+    
+    # Ignore if no media
+    if NumMedia == 0:
+        return PlainTextResponse("")  # Empty response = no reply
+    
+    # Only handle images (first one if multiple)
+    if not MediaUrl0 or "image" not in MediaContentType0:
+        return PlainTextResponse("")  # Ignore non-images
+    
+    # Temp filename based on MessageSid
+    ext = MediaContentType0.split("/")[-1] or "jpg"
+    if ext not in ["jpeg", "jpg", "png", "webp"]:
+        ext = "jpg"
+    temp_filename = f"whatsapp_{MessageSid}.{ext}"
+    temp_path = f"/tmp/{temp_filename}"  # Use /tmp for temp files
+    
+    try:
+        # Download image from Twilio (public URL, no auth needed in webhook)
+        async with httpx.AsyncClient(follow_redirects=True) as client:
+            response = await client.get(MediaUrl0, auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN))
+            response.raise_for_status()
+
+            content = await response.aread()
+            async with aiofiles.open(temp_path, 'wb') as f:
+                await f.write(content)
+        
+        # Fake an UploadFile to reuse your detect_image_manipulation function
+        class FakeUploadFile:
+            def __init__(self, filename, file_path):
+                self.filename = filename
+                self.file = open(file_path, "rb")
+            
+            async def read(self):
+                return self.file.read()
+            
+            def close(self):
+                self.file.close()
+        
+        fake_file = FakeUploadFile(temp_filename, temp_path)
+        
+        # Run your existing image detection (reuses AI, queue, DB)
+        result = await detect_image_manipulation(image=fake_file, db=db)
+        
+        # Optional: Auto-reply to user via TwiML (XML for Twilio)
+        is_fake = result.get("is_fake", False)
+        confidence = result.get("confidence", 0)
+        message = (
+            f"Analysis complete! {'⚠ Deepfake detected' if is_fake else '✅ Appears authentic'} "
+            f"({confidence:.0f}% confidence).\nCase ID: {result['caseId']}\nDetails: {result['verdict']}"
+        )
+        twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
+                   <Response><Message>{message}</Message></Response>"""
+        
+        return PlainTextResponse(twiml, media_type="application/xml")
+    
+    except Exception as e:
+        print(f"WhatsApp processing failed: {e}")
+        # Optional: Reply with error
+        error_twiml = """<?xml version="1.0" encoding="UTF-8"?>
+                         <Response><Message>Sorry, processing failed. Try again!</Message></Response>"""
+        return PlainTextResponse(error_twiml, media_type="application/xml")
+    
+    finally:
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)  # Clean up temp file
 
 # =============================================================================
 # Health Check
