@@ -1,0 +1,31 @@
+# Ignore environment files
+.env
+*.env
+.env.*
+
+# Node.js / React frontend
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+
+# Python backend
+backend/__pycache__/
+backend/.venv/
+backend/venv/
+backend/*.pyc
+
+# Docker
+**/Dockerfile
+**/docker-compose.yml
+
+# VS Code settings
+.vscode/
+
+# Logs
+*.log
+backend/logs/
+frontend/logs/
+
+# Generated files
+*.sqlite3
+*.db
